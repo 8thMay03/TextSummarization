@@ -45,9 +45,12 @@ def build_config(args: argparse.Namespace) -> SummarizationConfig:
 def compute_rouge_metrics(tokenizer, eval_pred):
     rouge = evaluate.load("rouge")
     predictions, labels = eval_pred
-    decoded_predictions = tokenizer.batch_decode(predictions, skip_special_tokens=True)
 
-    labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+    pad_token_id = tokenizer.pad_token_id
+    predictions = np.where(predictions >= 0, predictions, pad_token_id)
+    labels = np.where(labels != -100, labels, pad_token_id)
+
+    decoded_predictions = tokenizer.batch_decode(predictions, skip_special_tokens=True)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
     result = rouge.compute(
