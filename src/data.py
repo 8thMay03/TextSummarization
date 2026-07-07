@@ -9,7 +9,9 @@ from src.config import SummarizationConfig
 
 
 def load_summarization_dataset(config: SummarizationConfig) -> DatasetDict:
-    return load_dataset(config.dataset_name, config.dataset_config)
+    if config.dataset_config:
+        return load_dataset(config.dataset_name, config.dataset_config)
+    return load_dataset(config.dataset_name)
 
 
 def preprocess_batch(
@@ -17,9 +19,12 @@ def preprocess_batch(
     tokenizer: PreTrainedTokenizerBase,
     config: SummarizationConfig,
 ) -> dict[str, Any]:
-    inputs = [config.prefix + text for text in examples[config.source_column]]
+    texts = examples[config.source_column]
+    if config.prefix:
+        texts = [config.prefix + text for text in texts]
+
     model_inputs = tokenizer(
-        inputs,
+        texts,
         max_length=config.max_source_length,
         truncation=True,
     )
@@ -33,6 +38,13 @@ def preprocess_batch(
     return model_inputs
 
 
+def _maybe_subset(split, max_samples: int | None, seed: int):
+    if not max_samples:
+        return split
+    split = split.shuffle(seed=seed)
+    return split.select(range(min(max_samples, len(split))))
+
+
 def tokenize_dataset(
     dataset: DatasetDict,
     tokenizer: PreTrainedTokenizerBase,
@@ -41,16 +53,19 @@ def tokenize_dataset(
     max_eval_samples: int | None = None,
     max_test_samples: int | None = None,
 ) -> DatasetDict:
-    if max_train_samples:
-        dataset["train"] = dataset["train"].select(range(min(max_train_samples, len(dataset["train"]))))
-    if max_eval_samples:
-        dataset["validation"] = dataset["validation"].select(
-            range(min(max_eval_samples, len(dataset["validation"])))
-        )
-    if max_test_samples:
-        dataset["test"] = dataset["test"].select(range(min(max_test_samples, len(dataset["test"]))))
+    tokenized = DatasetDict(
+        {
+            split: _maybe_subset(dataset[split], max_samples, config.seed)
+            for split, max_samples in (
+                ("train", max_train_samples),
+                ("validation", max_eval_samples),
+                ("test", max_test_samples),
+            )
+            if split in dataset
+        }
+    )
 
-    return dataset.map(
+    return tokenized.map(
         lambda batch: preprocess_batch(batch, tokenizer, config),
         batched=True,
         remove_columns=dataset["train"].column_names,

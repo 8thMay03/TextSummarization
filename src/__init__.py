@@ -1,1 +1,1 @@
-"""Training and inference package for T5 summarization."""
+"""Training and inference package for ViT5 Vietnamese summarization."""

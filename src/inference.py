@@ -5,35 +5,37 @@ import argparse
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-from src.config import DEFAULT_CONFIG
+from src.config import DEFAULT_CONFIG, SummarizationConfig
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate a summary with T5.")
+    parser = argparse.ArgumentParser(description="Generate a Vietnamese summary with ViT5.")
     parser.add_argument("--model-path", default=DEFAULT_CONFIG.output_dir)
     parser.add_argument("--text", required=True)
-    parser.add_argument("--max-length", type=int, default=128)
+    parser.add_argument("--max-length", type=int, default=DEFAULT_CONFIG.max_target_length)
     parser.add_argument("--min-length", type=int, default=30)
-    parser.add_argument("--num-beams", type=int, default=4)
+    parser.add_argument("--num-beams", type=int, default=DEFAULT_CONFIG.generation_num_beams)
     return parser.parse_args()
 
 
 def summarize(
     text: str,
     model_path: str = DEFAULT_CONFIG.output_dir,
-    max_length: int = 128,
+    config: SummarizationConfig = DEFAULT_CONFIG,
+    max_length: int = DEFAULT_CONFIG.max_target_length,
     min_length: int = 30,
-    num_beams: int = 4,
+    num_beams: int = DEFAULT_CONFIG.generation_num_beams,
 ) -> str:
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
+    input_text = f"{config.prefix}{text}" if config.prefix else text
     inputs = tokenizer(
-        DEFAULT_CONFIG.prefix + text,
+        input_text,
         return_tensors="pt",
-        max_length=DEFAULT_CONFIG.max_source_length,
+        max_length=config.max_source_length,
         truncation=True,
     ).to(device)
 
