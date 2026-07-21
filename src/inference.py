@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-from src.config import DEFAULT_CONFIG, SummarizationConfig
+from src.config import DEFAULT_CONFIG, Config
 
 
 def parse_args() -> argparse.Namespace:
@@ -13,7 +14,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-path", default=DEFAULT_CONFIG.output_dir)
     parser.add_argument("--text", required=True)
     parser.add_argument("--max-length", type=int, default=DEFAULT_CONFIG.max_target_length)
-    parser.add_argument("--min-length", type=int, default=30)
     parser.add_argument("--num-beams", type=int, default=DEFAULT_CONFIG.generation_num_beams)
     return parser.parse_args()
 
@@ -21,28 +21,28 @@ def parse_args() -> argparse.Namespace:
 def summarize(
     text: str,
     model_path: str = DEFAULT_CONFIG.output_dir,
-    config: SummarizationConfig = DEFAULT_CONFIG,
+    config: Config = DEFAULT_CONFIG,
     max_length: int = DEFAULT_CONFIG.max_target_length,
-    min_length: int = 30,
     num_beams: int = DEFAULT_CONFIG.generation_num_beams,
 ) -> str:
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    model.eval()
 
     input_text = f"{config.prefix}{text}" if config.prefix else text
     inputs = tokenizer(
         input_text,
-        return_tensors="pt",
         max_length=config.max_source_length,
         truncation=True,
+        return_tensors="pt",
     ).to(device)
 
     summary_ids = model.generate(
-        **inputs,
+        inputs["input_ids"],
+        attention_mask=inputs["attention_mask"],
         max_length=max_length,
-        min_length=min_length,
         num_beams=num_beams,
         early_stopping=True,
     )
@@ -50,17 +50,23 @@ def summarize(
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
     args = parse_args()
     print(
         summarize(
             text=args.text,
             model_path=args.model_path,
             max_length=args.max_length,
-            min_length=args.min_length,
             num_beams=args.num_beams,
         )
     )
 
 
 if __name__ == "__main__":
-    main()
+    import time
+    start = time.time()
+    # main()
+    text = "Việt Nam là một quốc gia nằm ở khu vực Đông Nam Á, thuộc châu Á. Việt Nam có diện tích 331.212 km2, dân số 98,9 triệu người (2021). Việt Nam giáp với Làng, Trung Quốc, Campuchia, Làng, Thái Lan và Ma-lai-xi-a. Việt Nam có đường biên giới trên biển với Thái Lan, Ma-lai-xi-a, Brunei, Philippines và Việt Nam."
+    print(summarize(text=text, model_path=DEFAULT_CONFIG.output_dir, max_length=DEFAULT_CONFIG.max_target_length, num_beams=DEFAULT_CONFIG.generation_num_beams))
+    end = time.time()
+    print(f"Time taken: {(end - start):.4f} seconds")

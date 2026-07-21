@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from transformers import (
     AutoModelForSeq2SeqLM,
@@ -10,7 +11,7 @@ from transformers import (
     Seq2SeqTrainingArguments,
 )
 
-from src.config import DEFAULT_CONFIG
+from src.config import DEFAULT_CONFIG, Config
 from src.data import load_summarization_dataset, tokenize_dataset
 from src.train import compute_rouge_metrics
 
@@ -18,14 +19,23 @@ from src.train import compute_rouge_metrics
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate a fine-tuned ViT5 summarization model.")
     parser.add_argument("--model-path", default=DEFAULT_CONFIG.output_dir)
-    parser.add_argument("--max-test-samples", type=int, default=2_000)
-    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--dataset-name", default=DEFAULT_CONFIG.dataset_name)
+    parser.add_argument("--max-test-samples", type=int, default=DEFAULT_CONFIG.test_sample_size)
+    parser.add_argument("--batch-size", type=int, default=1)
     return parser.parse_args()
 
 
+def build_config(args: argparse.Namespace) -> Config:
+    return Config(
+        dataset_name=args.dataset_name,
+        output_dir=args.model_path,
+    )
+
+
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
     args = parse_args()
-    config = DEFAULT_CONFIG
+    config = build_config(args)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_path)
@@ -35,6 +45,7 @@ def main() -> None:
         tokenizer,
         config,
         max_test_samples=args.max_test_samples,
+        splits=["test"],
     )
 
     training_args = Seq2SeqTrainingArguments(
